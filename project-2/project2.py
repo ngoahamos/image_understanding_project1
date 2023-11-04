@@ -1,188 +1,217 @@
+from blending import Blender
+import glob
 import cv2
 import numpy as np
-import csv
+import os
+from tqdm import tqdm
 
+def detectFeaturesAndMatch(img1, img2, nFeaturesReturn = 30):
+    '''
+    takes in two images, and returns a set of correspondences between the two images matched using ORB features, sorted from best to worst match using an L2 norm distance.
+    '''
+    kp1, des1 = orb.detectAndCompute(img1,None)
+    kp2, des2 = orb.detectAndCompute(img2,None)
+    matches = bf.match(des1,des2)
+    matches = sorted(matches, key = lambda x:x.distance) 
+    correspondences = []
+    for match in matches:
+        correspondences.append((kp1[match.queryIdx].pt, kp2[match.trainIdx].pt))
+    print('Totally', len(correspondences), 'matches')
+    src = np.float32([ m[0] for m in correspondences[:nFeaturesReturn] ]).reshape(-1,1,2)
+    dst = np.float32([ m[1] for m in correspondences[:nFeaturesReturn] ]).reshape(-1,1,2)
+    tempImg = cv2.drawMatches(img1, kp1, img2, kp2, matches, None, flags = 2)
+    cv2.imwrite('matches.png', tempImg)
 
-# Step 2: Warp images to spherical/cylindrical coordinates and estimate focal length
-def warp_to_cylindrical(images, focal_length=None):
-    if focal_length is None:
-        print("Focal length estimation")
-        image0 = images[0]
-        image1 = images[1]
-
-        print("keypoints and descriptors between the first two images")
-        sift = cv2.SIFT_create()
-        kp1, des1 = sift.detectAndCompute(image0, None)
-        kp2, des2 = sift.detectAndCompute(image1, None)
-
-        print("FLANN-based matcher")
-        index_params = dict(algorithm=0, trees=5)
-        search_params = dict(checks=50)
-        flann = cv2.FlannBasedMatcher(index_params, search_params)
-
-        # Match descriptors using FLANN
-        print("About to perform descriptor matching ...")
-        matches = flann.knnMatch(des1, des2, k=2)
-        print("✅ Matches obtained")
-
-        print("Perform Lowe's ratio test to get good matches")
-        good_matches = []
-        for m, n in matches:
-            if m.distance < 0.75 * n.distance:
-                good_matches.append(m)
-
-        src_pts = np.array([kp1[m.queryIdx].pt for m in good_matches])
-        dst_pts = np.array([kp2[m.trainIdx].pt for m in good_matches])
-
-        print("Perform RANSAC to estimate fundamental matrix and focal length")
-        fundamental_matrix, _ = cv2.findFundamentalMat(src_pts, dst_pts, cv2.FM_RANSAC)
-        focal_length = 1 / fundamental_matrix[0, 0]
-        print("✅ Estimated Focal Length {}".format(focal_length))
-
-    warped_images = []
-
-    for image in images:
-        height, width = image.shape[:2]
-        cylindrical_image = np.zeros_like(image)
-
-        for x in range(width):
-            for y in range(height):
-                theta = (x - width / 2) / focal_length
-                h = (y - height / 2) / focal_length
-                x_cart = focal_length * np.tan(theta)
-                y_cart = focal_length * h
-                x_new = int(x_cart + width / 2)
-                y_new = int(y_cart + height / 2)
-
-                if 0 <= x_new < width and 0 <= y_new < height:
-                    cylindrical_image[y, x] = image[y_new, x_new]
-
-        warped_images.append(cylindrical_image)
-
-    return warped_images, focal_length
-   
-# Step 3: Extract features
-def extract_features(images):
-    sift = cv2.SIFT_create()
-    keypoints = []
-    descriptors = []
-
-    for image in images:
-        kp, des = sift.detectAndCompute(image, None)
-        keypoints.append(kp)
-        descriptors.append(des)
-
-    return keypoints, descriptors
-
-# Step 4: Align neighboring pairs using RANSAC
-def align_images_ransac(images, keypoints, descriptors):
-    aligned_images = []
-    translations = []
-
-    for i in range(len(images) - 1):
-        kp1, kp2 = keypoints[i], keypoints[i + 1]
-        des1, des2 = descriptors[i], descriptors[i + 1]
-
-        bf = cv2.BFMatcher()
-        matches = bf.knnMatch(des1, des2, k=2)
-
-        good_matches = []
-        for m, n in matches:
-            if m.distance < 0.75 * n.distance:
-                good_matches.append(m)
-
-        if len(good_matches) < 4:
-            aligned_images.append(images[i])
-            continue
-
-        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-
-        M, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-        aligned_image = cv2.warpPerspective(images[i], M, (images[i].shape[1], images[i].shape[0]))
-
-        aligned_images.append(aligned_image)
-        translations.append(("image" + str(i), "image" + str(i + 1), M[0, 2], M[1, 2]))
-
-    return aligned_images, translations
-
-# Step 5: Write out list of neighboring translations
-def write_translation(translations, output_file):
-    with open(output_file, 'w', newline='') as csvfile:
-        csvwriter = csv.writer(csvfile)
-        csvwriter.writerow(["Image1", "Image2", "TranslationX", "TranslationY"])
-        for translation in translations:
-            csvwriter.writerow([translation[0], translation[1], translation[2], translation[3]])
-
-# Step 6: Correct for drift (implement your drift correction algorithm)
-def correct_drift(images, translations):
-    corrected_images = [images[0]]  # The first image remains unchanged
-
-    for i in range(1, len(images)):
-        translation_x_accumulated = 0
-        translation_y_accumulated = 0
-
-        for j in range(i):
-            translation_x_accumulated += translations[j][2]
-            translation_y_accumulated += translations[j][3]
-
-        translation_matrix = np.float32([[1, 0, translation_x_accumulated], [0, 1, translation_y_accumulated]])
-        drifted_image = cv2.warpAffine(images[i], translation_matrix, (images[i].shape[1], images[i].shape[0]))
-        corrected_images.append(drifted_image)
-
-    return corrected_images
-
-
-# Step 7: Read in warped images and blend them
-def blend_warped_images(warped_images):
-    blended_image = np.zeros_like(warped_images[0])
-
-    for image in warped_images:
-        blended_image += image
-
-    # blended_image /= (len(warped_images) * 1.0)
-
-    return blended_image
-
-# Step 8: Crop the result and import into a viewer
-def crop_and_view(result_image):
-    # Implement cropping and displaying the result in a viewer
-    # Use OpenCV or a similar library for image manipulation and display
-
-    cv2.imshow("Blended Image", result_image)
+    drawImage = cv2.drawMatches(img2, kp2, img1, kp1, matches, None, flags = 2)
+    drawImage = cv2.resize(drawImage, (400,300))
+    cv2.imshow('Matches', drawImage)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+    # exit()
+    return np.array(correspondences[:nFeaturesReturn]), src, dst
 
-# Example usage
-image_paths = ['image0.JPG', 'image1.JPG', 'image2.JPG']
-print('about to read images');
-images = [cv2.imread(path) for path in image_paths]
-print("✅ Done reading images");
+def getHomography(matches):
+    '''
+    Takes in the points of correspondences and returns the homography matrix by 
+    solving for the best fit transform using SVD.
+    '''
+    A = np.zeros((2*len(matches), 9))
+    for i, match in enumerate(matches):
+        src = match[0]
+        dst = match[1]
+        x1 = src[0]
+        x2 = dst[0]
+        y1 = src[1]
+        y2 = dst[1]
+        A[2*i] = np.array([x1, y1, 1, 0, 0, 0, -x1*x2, -y1*x2, -x2])
+        A[2*i+1] = np.array([0, 0, 0, x1, y1, 1, -x1*y2, -y1*y2, -y2])
+    
+    U, S, V = np.linalg.svd(A)
+    H = np.reshape(V[-1], (3, 3) )
+    return H
 
-print("about to warp images")
-warped_images, focal_length = warp_to_cylindrical(images)
-print("✅ Done warping images")
+def getBestHomographyRANSAC(matches, trials = 10000, threshold = 10, toChooseSamples = 4):
+    '''
+    Applies the RANSAC algorithm and tries out different homography matrices to compute the best matrix.
+    '''
+    finalH = None
+    nMaxInliers = 0
+    randomSample = None
+    for trialIndex in tqdm(range(trials)):
+        inliers = []
+        # randomly sample from the correspondences, and then compute homography matrix
+        # after finding homography, see if the number of inliers is the best so far. If yes, we take that homography.
+        # the number of correspondences for which we can compute the homography is a parameter.
+        randomSample = matches[np.random.choice(len(matches), size=toChooseSamples, replace=False)] 
+        H = getHomography(randomSample)
+        for match in matches:
+            src = np.append(match[0], 1).T
+            dst = np.append(match[1], 1).T
+            transformed = np.dot(H, src)
+            transformed /= transformed[2]
+            if np.linalg.norm(transformed - dst) < threshold:
+                inliers.append(match)
 
-print("Extracting features")
-keypoints, descriptors = extract_features(warped_images)
-print("✅ Features Extracted")
+        # best match => store 
+        if len(inliers) > nMaxInliers:
+            nMaxInliers = len(inliers)
+            finalH = H
+    print('Max inliers = ', nMaxInliers)
+    return finalH, randomSample
 
-print("Align neighboring pairs using RANSAC")
-aligned_images, translations = align_images_ransac(warped_images, keypoints, descriptors)
-print("✅ Done Aligning images")
+def transformPoint(i, j, H):
+    '''
+    Helper function that simply transforms the point according to a given homography matrix
+    '''
+    transformed = np.dot(H, np.array([i, j, 1]))
+    transformed /= transformed[2]
+    transformed = transformed.astype(np.int32)[:2]
+    return np.array(transformed)
 
-print("list of neighboring translations")
-write_translation(translations, 'translations.csv')
-print("✅ translation saved")
+def transformImage(img, H, dst, forward = False, offset = [0, 0]):
+    '''
+    Helper function that computes the transformed image after applying homography.
+    '''
+    h, w, _ = img.shape
+    if forward:
+        # direct conversion from image to warped image without gap filling.
+        coords = np.indices((w, h)).reshape(2, -1)
+        coords = np.vstack((coords, np.ones(coords.shape[1]))).astype(np.int32)    
+        transformedPoints = np.dot(H, coords)
+        yo, xo = coords[1, :], coords[0, :]
+        # projective transform. Output's 3rd index should be one to convert to cartesian coords.
+        yt = np.divide(np.array(transformedPoints[1, :]),np.array(transformedPoints[2, :])).astype(np.int32)
+        xt = np.divide(np.array(transformedPoints[0, :]),np.array(transformedPoints[2, :])).astype(np.int32)
+        dst[yt + offset[1], xt + offset[0]] = img[yo, xo]
+    else:
+        # applies inverse sampling to prevent any aliasing and hole effects in output image.
+        Hinv = np.linalg.inv(H)
+        topLeft = transformPoint(0, 0, H) 
+        topRight = transformPoint(w-1, 0, H) 
+        bottomLeft = transformPoint(0, h-1, H) 
+        bottomRight = transformPoint(w-1, h-1, H)
+        box = np.array([topLeft, topRight, bottomLeft, bottomRight])
+        minX = np.min(box[:, 0])
+        maxX = np.max(box[:, 0])
+        minY = np.min(box[:, 1])
+        maxY = np.max(box[:, 1])
+        # instead of iterating through the pixels, we take indices and do
+        # H.C, where C = coordinates to get the transformed pixels.
+        coords = np.indices((maxX - minX, maxY - minY)).reshape(2, -1)
+        coords = np.vstack((coords, np.ones(coords.shape[1]))).astype(np.int32)   
 
-# Continue with other steps, correct for drift, blend images, crop, and view the result
-print("let's correct drift")
-corrected_images = correct_drift(aligned_images, translations)
-print("✅ Image corrected")
+        coords[0, :] += minX
+        coords[1, :] += minY
+        # here, we use the inverse transformation from the transformed bounding box to compute the pixel value of the transformed image.
+        transformedPoints = np.dot(Hinv, coords)
+        yo, xo = coords[1, :], coords[0, :]
 
-print("Let's create panaroma")
-blended_image = blend_warped_images(corrected_images)
-print("✅ panaroma created");
+        # projective transform. Output's 3rd index should be one to convert to cartesian coords.
+        yt = np.divide(np.array(transformedPoints[1, :]),np.array(transformedPoints[2, :])).astype(np.int32)
+        xt = np.divide(np.array(transformedPoints[0, :]),np.array(transformedPoints[2, :])).astype(np.int32)
 
-print("Let's show result")
-crop_and_view(blended_image)
+
+        # to prevent out of range errors
+        indices = np.where((yt >= 0) & (yt < h) & (xt >= 0) & (xt < w))
+
+        xt = xt[indices]
+        yt = yt[indices]
+
+        xo = xo[indices]
+        yo = yo[indices]
+
+        # assign pixel values!
+        dst[yo + offset[1], xo + offset[0]] = img[yt, xt]
+
+def execute(index1, index2, prevH):
+    '''
+    Function that, for a given pair of indices, computes the best homography and saves the warped images to disk.
+    '''
+    warpedImage = np.zeros((4192, 8192, 3))
+    img1 = cv2.imread(imagePaths[index1])
+    img2 = cv2.imread(imagePaths[index2])
+    print('Original image size = ', img1.shape)
+    img1 = cv2.resize(img1, shape)
+    img2 = cv2.resize(img2,shape)
+    matches, src, dst = detectFeaturesAndMatch(img2, img1)
+    H, subsetMatches = getBestHomographyRANSAC(matches, trials = trials, threshold = threshold)
+    prevH = np.dot(prevH, H)
+    transformImage(img2, prevH, dst = warpedImage, offset = offset)
+   
+    cv2.imwrite('outputs/l' + str(imageSet) + '/custom/warped_' + str(index2) +  '.png', warpedImage)
+    
+    return prevH
+
+
+if __name__ == "__main__":
+
+
+    imageSet = 7
+
+
+    imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
+    os.makedirs('outputs/l' + str(imageSet) + '/custom/', exist_ok = True)
+
+
+    orb = cv2.ORB_create()
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    shape = (600, 400) # resize in order to improve speed and relax size constraints.
+    mid = len(imagePaths)//2
+    
+    threshold = 2
+    trials = 5000
+    offset = [2300, 800]
+       
+    prevH = np.eye(3)
+    prevH = execute(2, 1, prevH)
+    prevH = execute(1, 0, prevH)
+
+    prevH = np.eye(3)
+    prevH = execute(2, 2, prevH) # this is wasteful, but gets the job done.
+
+    prevH = np.eye(3)
+    prevH = execute(2, 3, prevH)
+    prevH = execute(3, 4, prevH)
+
+    if imageSet == 1:
+        prevH = execute(4, 5, prevH)
+
+    # WARPING COMPLETE. BLENDING START
+    
+    b = Blender() # This blender object is written in blender.py. Its been encapsulated in a class to improve ease of use.
+    finalImg =  cv2.imread('outputs/l' + str(imageSet) + '/custom/'  + 'warped_' + str(0) + '.png')
+    if imageSet == 1:
+        length = 6
+    else:
+        length = 5
+    for index in range(1, length):
+        print('blending', index)
+        img2 = cv2.imread('outputs/l' + str(imageSet) + '/custom/' + 'warped_' + str(index) + '.png')
+        # print('blending', index, 'outputs/l' + str(imageSet) + '/custom/' + 'warped_' + str(index) + '.png')
+        finalImg, mask1truth, mask2truth = b.blend(finalImg, img2)
+        mask1truth = mask1truth + mask2truth
+        cv2.imwrite('outputs/l' + str(imageSet) + '/custom/' 'FINALBLENDED.png', finalImg)
+
+    
+
+    
