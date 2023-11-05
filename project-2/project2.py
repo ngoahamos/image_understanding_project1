@@ -19,14 +19,14 @@ def detectFeaturesAndMatch(img1, img2, nFeaturesReturn = 30):
     print('Totally', len(correspondences), 'matches')
     src = np.float32([ m[0] for m in correspondences[:nFeaturesReturn] ]).reshape(-1,1,2)
     dst = np.float32([ m[1] for m in correspondences[:nFeaturesReturn] ]).reshape(-1,1,2)
-    tempImg = cv2.drawMatches(img1, kp1, img2, kp2, matches, None, flags = 2)
-    cv2.imwrite('matches.png', tempImg)
+    # tempImg = cv2.drawMatches(img1, kp1, img2, kp2, matches, None, flags = 2)
+    # cv2.imwrite('matches.png', tempImg)
 
-    drawImage = cv2.drawMatches(img2, kp2, img1, kp1, matches, None, flags = 2)
-    drawImage = cv2.resize(drawImage, (400,300))
-    cv2.imshow('Matches', drawImage)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # drawImage = cv2.drawMatches(img2, kp2, img1, kp1, matches, None, flags = 2)
+    # drawImage = cv2.resize(drawImage, (400,300))
+    # cv2.imshow('Matches', drawImage)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     # exit()
     return np.array(correspondences[:nFeaturesReturn]), src, dst
 
@@ -158,7 +158,7 @@ def execute(index1, index2, prevH):
     prevH = np.dot(prevH, H)
     transformImage(img2, prevH, dst = warpedImage, offset = offset)
    
-    cv2.imwrite('outputs/l' + str(imageSet) + '/custom/warped_' + str(index2) +  '.png', warpedImage)
+    cv2.imwrite('outputs/warped_' + str(index2) +  '.png', warpedImage)
     
     return prevH
 
@@ -169,8 +169,8 @@ if __name__ == "__main__":
     imageSet = 7
 
 
-    imagePaths = sorted(glob.glob('dataset/I' + str(imageSet) + '/*'))
-    os.makedirs('outputs/l' + str(imageSet) + '/custom/', exist_ok = True)
+    imagePaths = sorted(glob.glob('images/*'))
+    os.makedirs('outputs/', exist_ok = True)
 
 
     orb = cv2.ORB_create()
@@ -199,18 +199,18 @@ if __name__ == "__main__":
     # WARPING COMPLETE. BLENDING START
     
     b = Blender() # This blender object is written in blender.py. Its been encapsulated in a class to improve ease of use.
-    finalImg =  cv2.imread('outputs/l' + str(imageSet) + '/custom/'  + 'warped_' + str(0) + '.png')
+    finalImg =  cv2.imread('outputs/' + 'warped_' + str(0) + '.png')
     if imageSet == 1:
         length = 6
     else:
         length = 5
     for index in range(1, length):
         print('blending', index)
-        img2 = cv2.imread('outputs/l' + str(imageSet) + '/custom/' + 'warped_' + str(index) + '.png')
-        # print('blending', index, 'outputs/l' + str(imageSet) + '/custom/' + 'warped_' + str(index) + '.png')
+        img2 = cv2.imread('outputs/' + 'warped_' + str(index) + '.png')
+        
         finalImg, mask1truth, mask2truth = b.blend(finalImg, img2)
         mask1truth = mask1truth + mask2truth
-        cv2.imwrite('outputs/l' + str(imageSet) + '/custom/' 'FINALBLENDED.png', finalImg)
+        cv2.imwrite('outputs/' + 'FINALBLENDED.png', finalImg)
 
     
 
