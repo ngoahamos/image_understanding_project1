@@ -22,11 +22,11 @@ def detectFeaturesAndMatch(img1, img2, nFeaturesReturn = 30):
     # tempImg = cv2.drawMatches(img1, kp1, img2, kp2, matches, None, flags = 2)
     # cv2.imwrite('matches.png', tempImg)
 
-    # drawImage = cv2.drawMatches(img2, kp2, img1, kp1, matches, None, flags = 2)
-    # drawImage = cv2.resize(drawImage, (400,300))
-    # cv2.imshow('Matches', drawImage)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    drawImage = cv2.drawMatches(img1, kp1, img2, kp2, matches, None, flags = 2)
+    drawImage = cv2.resize(drawImage, (400,300))
+    cv2.imshow('Matches', drawImage)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
     # exit()
     return np.array(correspondences[:nFeaturesReturn]), src, dst
 
