@@ -148,8 +148,8 @@ for i in range (len(steps)):
 
 print("##### Reconstruction error #########")
 print(len(E))
-subplot ( title ="Reconstruction", images =E, rows =5, cols =5, 
-         sptitle ="Eigenvectors ", sptitles =steps , colormap =plt.cm.gray , filename ="python_pca_reconstruction.png")
+subplot ( title ="Reconstruction", images =E[:-16], rows =4, cols =4, 
+         sptitle ="Eigenvectors ", sptitles =steps[:-16] , colormap =plt.cm.gray , filename ="python_pca_reconstruction.png")
 
 
 def dist_metric(p,q):
