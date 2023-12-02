@@ -146,10 +146,8 @@ for i in range (len(steps)):
     R = R.reshape(X_small[0].shape )
     E.append(np.asarray(R))
 
-print("##### Reconstruction error #########")
-print(len(E))
-subplot ( title ="Reconstruction", images =E[:-16], rows =4, cols =4, 
-         sptitle ="Eigenvectors ", sptitles =steps[:-16] , colormap =plt.cm.gray , filename ="python_pca_reconstruction.png")
+subplot ( title ="Reconstruction", images =E[-25:], rows =5, cols =5, 
+         sptitle ="Eigenvectors ", sptitles =steps[-25:] , colormap =plt.cm.gray , filename ="python_pca_reconstruction.png")
 
 
 def dist_metric(p,q):
@@ -172,7 +170,7 @@ projections = []
 for xi in X:
     projections.append(project (eigenvectors, xi.reshape(1 , -1) , mean))
 
-image = Image.open("test.jpg")
+image = Image.open("test_2.jpg")
 image = image.convert ("L")
 if (DEFAULT_SIZE is not None ):
     image = image.resize (DEFAULT_SIZE , Image.LANCZOS )
