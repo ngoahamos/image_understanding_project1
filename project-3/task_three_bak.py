@@ -1,4 +1,3 @@
-# https://www.youtube.com/watch?v=pQvkoaevVMk
 import os
 import numpy as np
 from PIL import Image
