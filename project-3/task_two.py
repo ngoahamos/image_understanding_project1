@@ -1,7 +1,7 @@
 import cv2
 
 # Load the image
-image_path = 'group.png'
+image_path = 'group-scale.png'
 image = cv2.imread(image_path)
 
 # Convert the image to grayscale
@@ -19,5 +19,6 @@ for (x, y, w, h) in faces:
 
 # Save or display the result
 cv2.imshow('Detected Faces', image)
+cv2.imwrite('group_scale_detected.png', image)
 cv2.waitKey(0)
 cv2.destroyAllWindows()

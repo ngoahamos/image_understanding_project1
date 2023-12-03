@@ -19,7 +19,7 @@ def read_images(image_path=IMAGE_DIR, default_size=DEFAULT_SIZE, mode=MODE):
         for image_name in image_names:
             # in training faces we pick only the first 5
             if mode == 'Train':
-                if counter < 5:
+                if counter < 5: 
 
                     image = Image.open (os.path.join(dir_path, image_name))
                     image = image.convert ("L")
@@ -170,7 +170,7 @@ projections = []
 for xi in X:
     projections.append(project (eigenvectors, xi.reshape(1 , -1) , mean))
 
-image = Image.open("test_2.jpg")
+image = Image.open("test_2.png")
 image = image.convert ("L")
 if (DEFAULT_SIZE is not None ):
     image = image.resize (DEFAULT_SIZE , Image.LANCZOS )

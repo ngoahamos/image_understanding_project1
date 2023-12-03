@@ -1,50 +1,68 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-from PIL import Image
 import os
+import numpy as np
+from sklearn.decomposition import PCA
+import cv2
+import matplotlib.pyplot as plt
 
-# Load the training data
-X_train = []  # List to store the training images
-image_dir = 'dataset/CelebA_Train'
-for filename in os.listdir(image_dir):  # Loop through the folder containing images
-    img = Image.open(os.path.join(image_dir, filename))  # Open the image file
-    img = img.resize((64, 64))  # Resize the image to 64x64 pixels
-    img = np.array(img)  # Convert the image to a numpy array
-    img = img.flatten()  # Flatten the array to a one-dimensional vector
-    X_train.append(img)  # Append the vector to the list
+# Function to load images from a folder
+def load_images(folder_path):
+    images = []
+    for filename in os.listdir(folder_path):
+        img_path = os.path.join(folder_path, filename)
+        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+        if img is not None:
+            images.append(img)
+    return images
 
-X_train = np.array(X_train)  # Convert the list to a numpy array
-n_samples, n_features = X_train.shape
+# Load images from CelebA_Train folder
+folder_path = 'dataset/CelebA_Train'  
+images = load_images(folder_path)
 
-# Normalize the data
-X_train = X_train / 255.0
+# Convert images to NumPy array
+data = np.array(images)
 
-# Compute the mean face
-mean_face = np.mean(X_train, axis=0)
+# Flatten the images
+flattened_data = data.reshape(data.shape[0], -1)
 
-# Subtract the mean face from the data
-X_train = X_train - mean_face
+# Number of eigenfaces to consider (adjust as needed)
+num_eigenfaces = 20
 
-# Perform PCA to compute eigenfaces
-pca = PCA(n_components=30)  # Change this to use a different number of eigenfaces
-pca.fit(X_train)
-eigenfaces = pca.components_  # Shape: (n_components, n_features)
+# Perform PCA
+pca = PCA(n_components=num_eigenfaces)
+pca.fit(flattened_data)
 
-# Show the eigenface images
-fig, axes = plt.subplots(3, 10, figsize=(15, 5))
-for i, ax in enumerate(axes.flat):
-    ax.imshow(eigenfaces[i].reshape(64, 64, 3), cmap='gray')
-    ax.set_title(f'Eigenface {i+1}')
+# Display eigenfaces
+eigenfaces = pca.components_.reshape((num_eigenfaces, data.shape[1], data.shape[2]))
+
+for i in range(num_eigenfaces):
+    plt.subplot(4, 5, i + 1)  # Change the layout based on your preference
+    plt.imshow(eigenfaces[i], cmap='gray')
+    plt.axis('off')
+
 plt.show()
 
-# Project a face image into the face space
-face = X_train[0]  # Change this to use a different face image
-face_projected = pca.transform(face.reshape(1, -1))  # Shape: (1, n_components)
+# Project a face image into the face space and show the reconstructed face
+# Pick an image from the dataset
+test_image = flattened_data[0]
 
-# Show the reconstructed face
-face_reconstructed = pca.inverse_transform(face_projected)  # Shape: (1, n_features)
-face_reconstructed = face_reconstructed + mean_face  # Add back the mean face
-plt.imshow(face_reconstructed.reshape(64, 64, 3), cmap='gray')
-plt.title('Reconstructed face')
+# Project the image onto the eigenfaces space
+projected = pca.transform([test_image])
+
+# Reconstruct the image
+reconstructed = pca.inverse_transform(projected)
+
+# Reshape the reconstructed image to its original shape
+reconstructed_image = reconstructed.reshape(data.shape[1], data.shape[2])
+
+# Display the original and reconstructed images
+plt.subplot(1, 2, 1)
+plt.imshow(data[0], cmap='gray')
+plt.title('Original Image')
+plt.axis('off')
+
+plt.subplot(1, 2, 2)
+plt.imshow(reconstructed_image, cmap='gray')
+plt.title('Reconstructed Image')
+plt.axis('off')
+
 plt.show()
